@@ -39,7 +39,7 @@ Run the compiled executable or use the dotnet run command followed by the requir
 ### Syntax
 
 ```cmd
-UpdaterApp <repo> <file> [optional_post_exec]
+UpdaterApp <repo> <file> <target_extraction_folder> [optional_post_exec]
 ```
 
 ### Parameters
@@ -48,7 +48,15 @@ UpdaterApp <repo> <file> [optional_post_exec]
 
 2. `<file>` (Required): The specific asset filename to look for in the latest release.
 
-3. `[optional_post_exec]` (Optional): A path to a local executable, `.bat`, or `.cmd` file to trigger immediately after extraction completes.
+3. `<target_extraction_folder>` (Required): The local folder path where the downloaded release archive will be extracted.
+
+4. `[optional_post_exec]` (Optional): A path to a local executable, `.bat`, or `.cmd` file to trigger immediately after extraction completes.
+
+### Example
+
+```cmd
+UpdaterApp "oven-sh/bun" "bun-windows-x64.zip" "C:\tools\bun" "C:\tools\bun\install.bat"
+```
 
 ## How to Build & Publish for Release
 

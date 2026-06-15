@@ -1,26 +1,49 @@
-﻿using System.Text.Json;
+﻿using System;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
-using SevenZipExtractor; // Changed from to SevenZipExtractor
+using SevenZipExtractor;
 
-// 1. Validate Command-Line Arguments
-if (args.Length < 2)
+// 1. Validate Command-Line Arguments (Minimum 3 parameters required now)
+if (args.Length < 3)
 {
     Console.ForegroundColor = ConsoleColor.Red;
     Console.WriteLine("Error: Missing parameters.");
     Console.ResetColor();
-    Console.WriteLine("\nUsage: UpdaterApp <repo> <file> [optional_post_exec]");
-    Console.WriteLine("Example: UpdaterApp \"oven-sh/bun\" \"bun-windows-x64.zip\" \"C:\\MyFolder\\install.bat\"");
+    Console.WriteLine("\nUsage: UpdaterApp <repo> <file> <target_extraction_folder> [optional_post_exec]");
+    Console.WriteLine("Example: UpdaterApp \"oven-sh/bun\" \"bun-windows-x64.zip\" \"C:\\tools\\bun\" \"C:\\tools\\bun\\install.bat\"");
     return;
 }
 
 // Read inputs and trim any trailing whitespaces
 string repo = args[0].Trim();
 string file = args[1].Trim();
-string? postExecutionFile = args.Length >= 3 ? args[2].Trim() : null;
+string targetFolder = args[2].Trim();
+string? postExecutionFile = args.Length >= 4 ? args[3].Trim() : null;
 
-// 2. Load appsettings.json Configuration
+// 2. Target Folder Creation & Verification
+try
+{
+    if (!Directory.Exists(targetFolder))
+    {
+        Console.WriteLine($"Target folder '{targetFolder}' does not exist. Creating directory...");
+        Directory.CreateDirectory(targetFolder);
+    }
+}
+catch (Exception ex)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine($"Error: Failed to verify or create target folder: {ex.Message}");
+    Console.ResetColor();
+    return;
+}
+
+// 3. Load appsettings.json Configuration
 var builder = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
@@ -33,11 +56,11 @@ string jsonProperty = config["GitHubSettings:TagNameJsonProperty"] ?? "tag_name"
 // Build the release URL dynamically
 string releasesUrl = releasesTemplate.Replace("{repo}", repo);
 
-// 3. Setup HTTP Client (GitHub requires a User-Agent header)
+// 4. Setup HTTP Client (GitHub requires a User-Agent header)
 using var httpClient = new HttpClient();
-httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AgnosticUpdaterApp", "1.0"));
+httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("AgnosticDownloaderApp", "1.0"));
 
-// 4. Fetch the latest release tag name
+// 5. Fetch the latest release tag name
 Console.WriteLine("Determining latest release...");
 string tag = string.Empty;
 
@@ -73,26 +96,23 @@ if (string.IsNullOrEmpty(tag))
 
 Console.WriteLine($"Latest Tag Identified: {tag}");
 
-// 5. Setup file structures
+// 6. Setup dynamic URL structures
 string downloadUrl = downloadTemplate
     .Replace("{repo}", repo)
     .Replace("{tag}", tag)
     .Replace("{file}", file);
 
-// Dynamically extract the name and extension (handles .zip, .7z, and even .tar.gz)
-int firstDotIndex = file.IndexOf('.');
-string name = firstDotIndex > 0 ? file.Substring(0, firstDotIndex) : file;
-string extension = firstDotIndex > 0 ? file.Substring(firstDotIndex) : string.Empty;
+string name = file.Split('.')[0];
 
-string downloadedFile = $"{name}-{tag}{extension}";
-string tempDir = $"{name}-{tag}";
+// Store downloaded zip file inside the system temp directory so we don't clutter the execution path
+string zipFile = Path.Combine(Path.GetTempPath(), $"{name}-{tag}.zip");
 
-// 6. Download the release archive
+// 7. Download the release archive
 Console.WriteLine($"Downloading latest release from: {downloadUrl}");
 try
 {
     byte[] fileBytes = await httpClient.GetByteArrayAsync(downloadUrl);
-        await File.WriteAllBytesAsync(downloadedFile, fileBytes);
+    await File.WriteAllBytesAsync(zipFile, fileBytes);
 }
 catch (Exception ex)
 {
@@ -102,15 +122,14 @@ catch (Exception ex)
     return;
 }
 
-// 7. Extract the archive using SevenZipExtractor
-Console.WriteLine("Extracting release files...");
+// 8. Extract the archive directly to target folder using SevenZipExtractor
+Console.WriteLine($"Extracting release files directly to: '{targetFolder}'...");
 try
 {
-     //SevenZipExtractor loads its native dll and handles extraction
-     using (var archiveFile = new ArchiveFile(downloadedFile))
-     {
-        archiveFile.Extract(tempDir);
-     }
+    using (var archiveFile = new ArchiveFile(zipFile))
+    {
+        archiveFile.Extract(targetFolder);
+    }
 }
 catch (Exception ex)
 {
@@ -120,63 +139,19 @@ catch (Exception ex)
     return;
 }
 
-// 8. Clean up destination and move directory structures
-Console.WriteLine("Cleaning up target folder...");
+// 9. Remove downloaded temporary ZIP file
+Console.WriteLine("Removing downloaded temporary ZIP file...");
 try
 {
-    if (Directory.Exists(name))
+    if (File.Exists(zipFile))
     {
-        Directory.Delete(name, true);
-    }
-}
-catch (IOException ex)
-{
-    Console.WriteLine($"Warning: Could not remove old folder '{name}': {ex.Message}");
-}
-
-Console.WriteLine("Moving files to final destination...");
-try
-{
-    string extractedSubfolder = Path.Combine(tempDir, name);
-    if (Directory.Exists(extractedSubfolder))
-    {
-        Directory.Move(extractedSubfolder, name);
-    }
-    else
-    {
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"Warning: Extracted subfolder '{extractedSubfolder}' not found. Cannot perform final move.");
-        Console.ResetColor();
+        File.Delete(zipFile);
     }
 }
 catch (Exception ex)
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine($"Failed to move final directories: {ex.Message}");
-    Console.ResetColor();
-    return;
+    Console.WriteLine($"Warning: Failed to clean up temporary ZIP file: {ex.Message}");
 }
-
-#region Removal of Temporary Files
-/*// 9. Remove temporary files
-Console.WriteLine("Removing temp files...");
-try
-{
-    if (File.Exists(downloadedFile))
-    {
-        File.Delete(downloadedFile);
-    }
-
-    if (Directory.Exists(tempDir))
-    {
-        Directory.Delete(tempDir, true);
-    }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Warning: Failed to perform clean-up of temporary items: {ex.Message}");
-}*/
-#endregion
 
 Console.ForegroundColor = ConsoleColor.Green;
 Console.WriteLine("\n[SUCCESS] Main routines completed successfully!");
@@ -192,7 +167,7 @@ if (!string.IsNullOrEmpty(postExecutionFile))
         var startInfo = new ProcessStartInfo
         {
             FileName = postExecutionFile,
-            UseShellExecute = true, // Enables OS shell resolution (crucial for .bat / .cmd)
+            UseShellExecute = true, // Enables OS shell resolution (crucial for .bat / .cmd files)
             CreateNoWindow = false
         };
 
@@ -205,7 +180,7 @@ if (!string.IsNullOrEmpty(postExecutionFile))
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine($"\n[WARNING] Could not execute the post-execution file.");
         Console.WriteLine($"Reason: {ex.Message}");
-        Console.WriteLine("Note: Arguments are not supported in the third parameter.");
+        Console.WriteLine("Note: Arguments are not supported in the fourth parameter.");
         Console.ResetColor();
     }
 }
