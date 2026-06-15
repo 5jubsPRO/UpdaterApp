@@ -157,7 +157,8 @@ catch (Exception ex)
     return;
 }
 
-// 9. Remove temporary files
+#region Removal of Temporary Files
+/*// 9. Remove temporary files
 Console.WriteLine("Removing temp files...");
 try
 {
@@ -174,7 +175,8 @@ try
 catch (Exception ex)
 {
     Console.WriteLine($"Warning: Failed to perform clean-up of temporary items: {ex.Message}");
-}
+}*/
+#endregion
 
 Console.ForegroundColor = ConsoleColor.Green;
 Console.WriteLine("\n[SUCCESS] Main routines completed successfully!");
