@@ -1,11 +1,10 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Threading.Tasks;
+using System.Diagnostics;
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using SevenZipExtractor;
 
@@ -15,7 +14,7 @@ if (args.Length < 3)
     Console.ForegroundColor = ConsoleColor.Red;
     Console.WriteLine("Error: Missing parameters.");
     Console.ResetColor();
-    Console.WriteLine("\nUsage: UpdaterApp <repo> <file> <target_extraction_folder> [optional_post_exec]");
+    Console.WriteLine("\nUsage: UpdaterApp <repo> <file> <target_folder> [optional_post_exec]");
     Console.WriteLine("Example: UpdaterApp \"oven-sh/bun\" \"bun-windows-x64.zip\" \"C:\\tools\\bun\" \"C:\\tools\\bun\\install.bat\"");
     return;
 }
@@ -96,23 +95,34 @@ if (string.IsNullOrEmpty(tag))
 
 Console.WriteLine($"Latest Tag Identified: {tag}");
 
-// 6. Setup dynamic URL structures
+// 6. Setup dynamic URL structures & identify file type
 string downloadUrl = downloadTemplate
     .Replace("{repo}", repo)
     .Replace("{tag}", tag)
     .Replace("{file}", file);
 
-string name = file.Split('.')[0];
+// Define common compressed archive extensions
+string[] archiveExtensions = { 
+    ".zip", ".7z", ".rar", ".tar", ".gz", ".gzip", ".tgz", 
+    ".bz2", ".tbz2", ".xz", ".txz", ".cab", ".iso", ".wim", 
+    ".lzma", ".z" 
+};
 
-// Store downloaded zip file inside the system temp directory so we don't clutter the execution path
-string zipFile = Path.Combine(Path.GetTempPath(), $"{name}-{tag}.zip");
+string lowerFile = file.ToLowerInvariant();
+bool isCompressed = archiveExtensions.Any(ext => lowerFile.EndsWith(ext));
 
-// 7. Download the release archive
+string extension = Path.GetExtension(file);
+string baseName = Path.GetFileNameWithoutExtension(file);
+
+// Store downloaded file inside the system temp directory so we don't clutter the execution path
+string tempDownloadedFile = Path.Combine(Path.GetTempPath(), $"{baseName}-{tag}{extension}");
+
+// 7. Download the release asset
 Console.WriteLine($"Downloading latest release from: {downloadUrl}");
 try
 {
     byte[] fileBytes = await httpClient.GetByteArrayAsync(downloadUrl);
-    await File.WriteAllBytesAsync(zipFile, fileBytes);
+    await File.WriteAllBytesAsync(tempDownloadedFile, fileBytes);
 }
 catch (Exception ex)
 {
@@ -122,35 +132,54 @@ catch (Exception ex)
     return;
 }
 
-// 8. Extract the archive directly to target folder using SevenZipExtractor
-Console.WriteLine($"Extracting release files directly to: '{targetFolder}'...");
-try
+// 8. Extract archive or copy file directly to target folder
+if (isCompressed)
 {
-    using (var archiveFile = new ArchiveFile(zipFile))
+    Console.WriteLine($"Extracting release files directly to: '{targetFolder}'...");
+    try
     {
-        archiveFile.Extract(targetFolder);
+        using (var archiveFile = new ArchiveFile(tempDownloadedFile))
+        {
+            archiveFile.Extract(targetFolder);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Extraction failed: {ex.Message}");
+        Console.ResetColor();
+        return;
     }
 }
-catch (Exception ex)
+else
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine($"Extraction failed: {ex.Message}");
-    Console.ResetColor();
-    return;
+    string destinationFile = Path.Combine(targetFolder, file);
+    Console.WriteLine($"Non-archive file detected. Copying file directly to: '{destinationFile}'...");
+    try
+    {
+        File.Copy(tempDownloadedFile, destinationFile, overwrite: true);
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Failed to copy file to target folder: {ex.Message}");
+        Console.ResetColor();
+        return;
+    }
 }
 
-// 9. Remove downloaded temporary ZIP file
-Console.WriteLine("Removing downloaded temporary ZIP file...");
+// 9. Remove downloaded temporary file
+Console.WriteLine("Removing downloaded temporary file...");
 try
 {
-    if (File.Exists(zipFile))
+    if (File.Exists(tempDownloadedFile))
     {
-        File.Delete(zipFile);
+        File.Delete(tempDownloadedFile);
     }
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Warning: Failed to clean up temporary ZIP file: {ex.Message}");
+    Console.WriteLine($"Warning: Failed to clean up temporary file: {ex.Message}");
 }
 
 Console.ForegroundColor = ConsoleColor.Green;

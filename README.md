@@ -1,13 +1,14 @@
 # AgnosticUpdaterApp
 
-A lightweight, agnostic .NET tool designed to fetch the latest release of any asset from a public GitHub repository, download it, extract it using SevenZipExtractor, and optionally run a post-execution command-line script (like a `.bat`, `.cmd`, or executable) in a fire-and-forget manner.
+A lightweight, agnostic .NET tool designed to fetch the latest release of any asset from a public GitHub repository, download it, extract it (or copy it directly if it's not a compressed archive), and optionally run a post-execution command-line script (like a `.bat`, `.cmd`, or executable) in a fire-and-forget manner.
 
 ---
 
 ## Features
 
 - **Repository Agnostic:** Works with any public GitHub repository and release assets.
-- **Dynamic File Extensions:** Automatically detects and handles any archive formats (e.g., `.zip`, `.7z`, `.tar.gz`) supported by the native 7-Zip engine.
+- **Smart Archive Handling:** Automatically detects compressed archive formats (such as `.zip`, `.7z`, `.rar`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.xz`, `.cab`, `.iso`, `.wim`, etc.) and extracts them to the target folder using the native 7-Zip engine.
+- **Direct File Downloads:** Non-compressed files (like `.exe`, `.bat`, `.sh`, or any standalone binary files) are downloaded and copied directly into the target folder without extraction.
 - **Post-Execution Scripting:** Spawns an external task (e.g., an installation batch file) immediately after successfully updating.
 - **Flexible Configuration:** Uses `appsettings.json` to configure URL templates and custom JSON parameters.
 
@@ -39,7 +40,7 @@ Run the compiled executable or use the dotnet run command followed by the requir
 ### Syntax
 
 ```cmd
-UpdaterApp <repo> <file> <target_extraction_folder> [optional_post_exec]
+UpdaterApp <repo> <file> <target_folder> [optional_post_exec]
 ```
 
 ### Parameters
@@ -48,9 +49,9 @@ UpdaterApp <repo> <file> <target_extraction_folder> [optional_post_exec]
 
 2. `<file>` (Required): The specific asset filename to look for in the latest release.
 
-3. `<target_extraction_folder>` (Required): The local folder path where the downloaded release archive will be extracted.
+3. `<target_folder>` (Required): The local folder path where the downloaded release asset will be extracted or copied.
 
-4. `[optional_post_exec]` (Optional): A path to a local executable, `.bat`, or `.cmd` file to trigger immediately after extraction completes.
+4. `[optional_post_exec]` (Optional): A path to a local executable, `.bat`, or `.cmd` file to trigger immediately after installation completes.
 
 ### Example
 
