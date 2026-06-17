@@ -6,7 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU;x86</Platforms>
+    <ApplicationIcon>UpdaterApp.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="UpdaterApp.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Modern .NET 10 configuration packages -->
