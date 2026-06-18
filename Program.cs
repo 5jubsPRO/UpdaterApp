@@ -1,12 +1,17 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using SevenZipExtractor;
+
+#if DEBUG
+args = new string[] {
+    "<usuario>/<repo>",
+    "arquivo.ext",
+    "<Drive>:\\<Caminho>\\<Pasta>",
+    "<Drive>:\\<Caminho>\\<ScriptDePósExecução>.bat"
+};
+#endif
 
 // 1. Validate Command-Line Arguments (Minimum 3 parameters required now)
 if (args.Length < 3)
@@ -48,7 +53,7 @@ var builder = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 IConfiguration config = builder.Build();
 
-string releasesTemplate = config["GitHubSettings:ReleasesApiUrlTemplate"] ?? "https://api.github.com/repos/{repo}/releases";
+string releasesTemplate = config["GitHubSettings:ReleasesApiUrlTemplate"] ?? "https://api.github.com/repos/{repo}/releases/latest";
 string downloadTemplate = config["GitHubSettings:DownloadUrlTemplate"] ?? "https://github.com/{repo}/releases/download/{tag}/{file}";
 string jsonProperty = config["GitHubSettings:TagNameJsonProperty"] ?? "tag_name";
 
@@ -67,10 +72,11 @@ try
 {
     string jsonResponse = await httpClient.GetStringAsync(releasesUrl);
     using var jsonDocument = JsonDocument.Parse(jsonResponse);
-    
-    if (jsonDocument.RootElement.ValueKind == JsonValueKind.Array && jsonDocument.RootElement.GetArrayLength() > 0)
+
+    //if (jsonDocument.RootElement.ValueKind == JsonValueKind.Array &&
+    if (jsonDocument.RootElement.ValueKind == JsonValueKind.Object)
     {
-        var latestRelease = jsonDocument.RootElement[0];
+        var latestRelease = jsonDocument.RootElement;//[0]
         if (latestRelease.TryGetProperty(jsonProperty, out var tagProperty))
         {
             tag = tagProperty.GetString() ?? string.Empty;

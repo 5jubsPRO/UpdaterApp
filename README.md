@@ -21,7 +21,7 @@ By default, the application uses the standard GitHub API structure. You can cust
 ```json
 {
   "GitHubSettings": {
-    "ReleasesApiUrlTemplate": "https://api.github.com/repos/{repo}/releases",
+    "ReleasesApiUrlTemplate": "https://api.github.com/repos/{repo}/releases/latest",
     "DownloadUrlTemplate": "https://github.com/{repo}/releases/download/{tag}/{file}",
     "TagNameJsonProperty": "tag_name"
   }
@@ -76,3 +76,13 @@ Your release files will be located in:
 `./bin/release/net10.0/publish`
 
 > Note: For extraction to succeed on your user's machine, the compiled `UpdaterApp.exe` must be bundled alongside `appsettings.json` and the `x86/` and `x64/` folders containing the native `7z.dll` libraries.
+
+---
+
+## Recent Updates
+
+- **Optimized JSON Parsing**: Switched the GitHub release endpoint lookup from `/releases` to `/releases/latest` inside `appsettings.json`.
+- **Simplified Deserialization**: Since `/releases/latest` returns a direct JSON Object instead of a JSON Array, the application was refactored to parse the `tag_name` directly from the root element, completely removing array indexing (`[0]`) logic and improving parsing robustness.
+- **Robust Verification**: Improved validation check to prevent potential out-of-bounds or formatting exceptions when reading API responses.
+- **Improved Temporary Cleanup**: Optimized the cleanup flow for downloaded temporary archive/asset files.
+- **Post-Execution Execution**: Configured ProcessStartInfo to trigger post-execution scripts asynchronously using OS shell execution, ensuring seamless handling of custom installation or update scripts.
